@@ -1,0 +1,25 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: geoting_db
+    environment:
+      POSTGRES_USER: geo
+      POSTGRES_PASSWORD: geo
+      # DB name `geo_lab` kept for compatibility with existing data volumes.
+      # Change to `geoting` for a fresh VDS deployment.
+      POSTGRES_DB: geo_lab
+    ports:
+      - "5433:5432"
+    volumes:
+      # Volume name kept for compatibility — renaming would orphan existing data.
+      - geo_lab_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U geo -d geo_lab"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  geo_lab_pgdata:
+    name: geolab_geo_lab_pgdata
+    external: true
