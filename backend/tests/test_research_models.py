@@ -17,6 +17,7 @@ from app.models import Project, Prompt, Research, ResearchModel, ResearchRun  # 
 from app.providers.base import ProviderError, ProviderUnavailable  # noqa: E402
 from app.providers.routerai_provider import RouterAIProvider  # noqa: E402
 from app.services import research_service  # noqa: E402
+from tests.conftest import ensure_test_org  # noqa: E402
 
 M1, M2, M3 = "deepseek/deepseek-v4-flash", "openai/gpt-5.4", "qwen/qwen3.7-flash"
 CATALOG = [{"id": M1, "name": M1}, {"id": M2, "name": M2}, {"id": M3, "name": M3}]
@@ -95,8 +96,9 @@ def _patch_provider(monkeypatch, bad_model=None):
 
 
 async def _build_project(n_prompts: int):
+    org_id = await ensure_test_org()
     async with SessionLocal() as db:
-        p = Project(name="MultiModel Test", city="VL", brand_aliases=["Priority Center"], competitors=[])
+        p = Project(name="MultiModel Test", city="VL", brand_aliases=["Priority Center"], competitors=[], organization_id=org_id)
         db.add(p)
         await db.flush()
         for i in range(n_prompts):

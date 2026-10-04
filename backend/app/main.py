@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select, text, update
 
 from app.api import auth as auth_api
-from app.api import dashboard, projects, prompts, research, settings
+from app.api import dashboard, organization, projects, prompts, research, settings
 from app.config import settings as app_settings
 from app.database import Base, SessionLocal, engine
 from app.models import Research, ResearchRun
@@ -152,6 +152,7 @@ app.include_router(research.router)
 app.include_router(dashboard.router)
 app.include_router(settings.router)
 app.include_router(auth_api.router)
+app.include_router(organization.router)
 
 
 @app.get("/api/health")

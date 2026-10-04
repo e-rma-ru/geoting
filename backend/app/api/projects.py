@@ -6,8 +6,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth import get_current_organization
+from app.auth import ROLE_ADMIN, ROLE_OWNER, get_current_organization, get_current_membership
 from app.database import get_db
+from app.models.organization_membership import OrganizationMembership
 from app.models.organization import Organization
 from app.models.project import Project
 from app.models.prompt import Prompt
@@ -125,7 +126,10 @@ async def delete_project(
     project_id: int,
     db: AsyncSession = Depends(get_db),
     current_org: Organization = Depends(get_current_organization),
+    current_membership: OrganizationMembership = Depends(get_current_membership),
 ):
+    if current_membership.role not in (ROLE_OWNER, ROLE_ADMIN):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only OWNER or ADMIN can delete projects")
     project = await _get_project_in_org(db, project_id, current_org.id)
     await db.delete(project)
     await db.commit()

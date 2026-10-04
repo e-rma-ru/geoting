@@ -122,3 +122,32 @@ async def get_current_organization(current_user: User = Depends(get_current_user
         if org is None:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization not found")
         return org
+
+
+async def get_current_membership(current_user: User = Depends(get_current_user)) -> OrganizationMembership:
+    async with SessionLocal() as db:
+        membership = (
+            await db.execute(
+                select(OrganizationMembership)
+                .where(OrganizationMembership.user_id == current_user.id)
+                .order_by(OrganizationMembership.id)
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        if membership is None:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No organization membership")
+        return membership
+
+
+ROLE_OWNER = "OWNER"
+ROLE_ADMIN = "ADMIN"
+ROLE_MEMBER = "MEMBER"
+
+
+def require_role(*allowed: str):
+    """Return a dependency that checks the current membership role."""
+    async def _require(current_membership: OrganizationMembership = Depends(get_current_membership)) -> OrganizationMembership:
+        if current_membership.role not in allowed:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
+        return current_membership
+    return _require

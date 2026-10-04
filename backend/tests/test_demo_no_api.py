@@ -16,6 +16,7 @@ from app.models.common import utcnow  # noqa: E402
 from app.services import metrics as metrics_module  # noqa: E402
 from app.services import research_service  # noqa: E402
 from app.services.profile_service import get_profiles  # noqa: E402
+from tests.conftest import ensure_test_org  # noqa: E402
 
 
 def _fail_if_called(provider_id):
@@ -29,10 +30,12 @@ def no_provider_calls(monkeypatch):
 
 
 async def _create_demo_like_research():
+    org_id = await ensure_test_org()
     async with SessionLocal() as db:
         project = Project(
             name="Demo NoCall Project", city="Владивосток",
             brand_aliases=["Priority Center"], competitors=[],
+            organization_id=org_id,
         )
         db.add(project)
         await db.flush()

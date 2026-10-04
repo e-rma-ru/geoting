@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import AuthGate from './AuthGate.jsx'
 import Account from './pages/Account.jsx'
+import OrganizationPage from './pages/Organization.jsx'
 import Projects from './pages/Projects.jsx'
 import ProjectDetail from './pages/ProjectDetail.jsx'
 import ResearchDashboard from './pages/ResearchDashboard.jsx'
@@ -18,6 +19,7 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/account" element={<Account />} />
+        <Route path="/organization" element={<OrganizationPage />} />
         <Route path="/projects" element={<Projects />} />
         <Route path="/projects/:projectId" element={<ProjectDetail />} />
         <Route path="/projects/:projectId/research/:researchId" element={<ResearchDashboard />} />

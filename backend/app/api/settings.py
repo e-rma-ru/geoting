@@ -8,7 +8,7 @@ from app.providers import provider_status
 from app.runtime_config import runtime_config_store
 from app.secrets import secret_store
 from app.services.model_catalog import model_catalog_info
-from app.services.provider_test import test_provider_connection
+from app.services.provider_connection import test_provider_connection
 
 router = APIRouter(prefix="/api", tags=["settings"])
 

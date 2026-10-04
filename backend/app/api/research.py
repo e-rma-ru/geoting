@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_org_project, get_org_research, get_org_run
-from app.auth import get_current_organization
+from app.auth import ROLE_ADMIN, ROLE_OWNER, get_current_organization, get_current_membership
 from app.database import get_db
 from app.models.citation import Citation
 from app.models.competitor_mention import CompetitorMention
@@ -100,9 +100,12 @@ async def delete_research(
     research_id: int,
     db: AsyncSession = Depends(get_db),
     current_org: Organization = Depends(get_current_organization),
+    current_membership: OrganizationMembership = Depends(get_current_membership),
 ):
     """Delete a research and all its children (runs, raw responses, analyses,
     citations, competitor mentions, AI profiles) via DB-level ON DELETE CASCADE."""
+    if current_membership.role not in (ROLE_OWNER, ROLE_ADMIN):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only OWNER or ADMIN can delete research")
     research = await get_org_research(db, research_id, current_org.id)
     await db.delete(research)
     await db.commit()

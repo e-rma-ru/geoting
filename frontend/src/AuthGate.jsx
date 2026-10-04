@@ -85,6 +85,7 @@ function AppLayout({ user, onLogout, children }) {
           <nav className="flex gap-1">
             <NavLink to="/projects" label="Проекты" />
             <NavLink to="/researches" label="Исследования" />
+            <NavLink to="/organization" label="Организация" />
             <NavLink to="/account" label="Аккаунт" />
             <NavLink to="/settings" label="Настройки" />
           </nav>

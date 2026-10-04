@@ -35,6 +35,16 @@ export const api = {
   updateProfile: (payload) => request('/api/auth/me', { method: 'PUT', body: JSON.stringify(payload) }),
   changePassword: (payload) => request('/api/auth/change-password', { method: 'POST', body: JSON.stringify(payload) }),
 
+  // organization
+  getOrganization: () => request('/api/organization'),
+  updateOrganization: (payload) => request('/api/organization', { method: 'PUT', body: JSON.stringify(payload) }),
+  listMembers: () => request('/api/organization/members'),
+  updateMemberRole: (id, payload) => request(`/api/organization/members/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  deleteMember: (id) => request(`/api/organization/members/${id}`, { method: 'DELETE' }),
+  transferOwnership: (payload) => request('/api/organization/transfer-ownership', { method: 'POST', body: JSON.stringify(payload) }),
+  createInvite: (payload) => request('/api/organization/invites', { method: 'POST', body: JSON.stringify(payload) }),
+  listInvites: () => request('/api/organization/invites'),
+
   // projects
   projects: () => request('/api/projects'),
   createProject: (payload) => request('/api/projects', { method: 'POST', body: JSON.stringify(payload) }),
