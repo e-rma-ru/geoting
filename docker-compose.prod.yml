@@ -1,0 +1,46 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-geoting}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?error}
+      POSTGRES_DB: geoting
+    volumes:
+      - geoting_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-geoting} -d geoting"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  backend:
+    build: ./backend
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-geoting}:${POSTGRES_PASSWORD:?error}@db:5432/geoting
+      ROUTERAI_API_KEY: ${ROUTERAI_API_KEY:?error}
+      ROUTERAI_BASE_URL: ${ROUTERAI_BASE_URL:-https://routerai.ru/api/v1}
+      ROUTERAI_DEFAULT_MODEL: ${ROUTERAI_DEFAULT_MODEL:-deepseek/deepseek-v4-flash}
+      MAX_CONCURRENT_REQUESTS: ${MAX_CONCURRENT_REQUESTS:-5}
+      MAX_RETRIES: ${MAX_RETRIES:-3}
+      REQUEST_TIMEOUT_SECONDS: ${REQUEST_TIMEOUT_SECONDS:-120}
+      ANALYZER_MODEL: ${ANALYZER_MODEL:-deepseek/deepseek-v4-flash}
+      PROFILE_EXTRACTION_BATCH_SIZE: ${PROFILE_EXTRACTION_BATCH_SIZE:-5}
+      PROFILE_FREQUENT_THRESHOLD: ${PROFILE_FREQUENT_THRESHOLD:-0.5}
+      PROFILE_MODERATE_THRESHOLD: ${PROFILE_MODERATE_THRESHOLD:-0.2}
+      PROFILE_SUMMARY_MIN_MENTIONS: ${PROFILE_SUMMARY_MIN_MENTIONS:-3}
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    depends_on:
+      - backend
+    ports:
+      - "5000:80"
+    restart: unless-stopped
+
+volumes:
+  geoting_pgdata:
