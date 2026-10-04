@@ -4,13 +4,15 @@ import csv
 import io
 from typing import Optional
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.projects import get_project_or_404
+from app.api.deps import get_org_project, get_org_prompt
+from app.auth import get_current_organization
 from app.database import get_db
+from app.models.organization import Organization
 from app.models.prompt import Prompt
 from app.schemas.prompt import PromptBulkImportResult, PromptCreate, PromptRead, PromptUpdate
 
@@ -23,8 +25,9 @@ async def list_prompts(
     cluster: Optional[str] = Query(default=None),
     active: Optional[bool] = Query(default=None),
     db: AsyncSession = Depends(get_db),
+    current_org: Organization = Depends(get_current_organization),
 ):
-    await get_project_or_404(db, project_id)
+    await get_org_project(db, project_id, current_org.id)
     query = select(Prompt).where(Prompt.project_id == project_id).order_by(Prompt.id)
     if cluster:
         query = query.where(Prompt.cluster == cluster)
@@ -34,8 +37,13 @@ async def list_prompts(
 
 
 @router.post("/projects/{project_id}/prompts", response_model=PromptRead, status_code=201)
-async def create_prompt(project_id: int, payload: PromptCreate, db: AsyncSession = Depends(get_db)):
-    await get_project_or_404(db, project_id)
+async def create_prompt(
+    project_id: int,
+    payload: PromptCreate,
+    db: AsyncSession = Depends(get_db),
+    current_org: Organization = Depends(get_current_organization),
+):
+    await get_org_project(db, project_id, current_org.id)
     prompt = Prompt(project_id=project_id, **payload.model_dump())
     db.add(prompt)
     await db.commit()
@@ -44,10 +52,13 @@ async def create_prompt(project_id: int, payload: PromptCreate, db: AsyncSession
 
 
 @router.put("/prompts/{prompt_id}", response_model=PromptRead)
-async def update_prompt(prompt_id: int, payload: PromptUpdate, db: AsyncSession = Depends(get_db)):
-    prompt = await db.get(Prompt, prompt_id)
-    if prompt is None:
-        raise HTTPException(status_code=404, detail="Prompt not found")
+async def update_prompt(
+    prompt_id: int,
+    payload: PromptUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_org: Organization = Depends(get_current_organization),
+):
+    prompt = await get_org_prompt(db, prompt_id, current_org.id)
     for field, value in payload.model_dump(exclude_unset=True).items():
         setattr(prompt, field, value)
     await db.commit()
@@ -56,10 +67,12 @@ async def update_prompt(prompt_id: int, payload: PromptUpdate, db: AsyncSession 
 
 
 @router.delete("/prompts/{prompt_id}", status_code=204)
-async def delete_prompt(prompt_id: int, db: AsyncSession = Depends(get_db)):
-    prompt = await db.get(Prompt, prompt_id)
-    if prompt is None:
-        raise HTTPException(status_code=404, detail="Prompt not found")
+async def delete_prompt(
+    prompt_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_org: Organization = Depends(get_current_organization),
+):
+    prompt = await get_org_prompt(db, prompt_id, current_org.id)
     await db.delete(prompt)
     await db.commit()
 
@@ -69,9 +82,10 @@ async def import_prompts_csv(
     project_id: int,
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
+    current_org: Organization = Depends(get_current_organization),
 ):
     """CSV format: text,cluster,intent  (one header row optional)."""
-    await get_project_or_404(db, project_id)
+    await get_org_project(db, project_id, current_org.id)
     raw = await file.read()
     text = raw.decode("utf-8-sig")
     reader = csv.reader(io.StringIO(text))
@@ -107,8 +121,12 @@ async def import_prompts_csv(
 
 
 @router.get("/projects/{project_id}/prompts/export")
-async def export_prompts_csv(project_id: int, db: AsyncSession = Depends(get_db)):
-    await get_project_or_404(db, project_id)
+async def export_prompts_csv(
+    project_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_org: Organization = Depends(get_current_organization),
+):
+    await get_org_project(db, project_id, current_org.id)
     prompts = list(
         (await db.execute(select(Prompt).where(Prompt.project_id == project_id).order_by(Prompt.id))).scalars()
     )

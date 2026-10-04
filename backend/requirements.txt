@@ -7,3 +7,5 @@ pydantic-settings==2.7.0
 httpx==0.28.1
 python-dotenv==1.0.1
 python-multipart==0.0.20
+passlib[argon2]==1.7.4
+PyJWT==2.10.0

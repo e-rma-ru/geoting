@@ -1,15 +1,18 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.projects import get_project_or_404
+from app.api.deps import get_org_project, get_org_research, get_org_run
+from app.auth import get_current_organization
 from app.database import get_db
 from app.models.citation import Citation
 from app.models.competitor_mention import CompetitorMention
 from app.models.mention_analysis import MentionAnalysis
+from app.models.organization import Organization
 from app.models.prompt import Prompt
+from app.models.project import Project
 from app.models.research import Research
 from app.models.research_run import ResearchRun
 from app.schemas.research import (
@@ -27,11 +30,17 @@ router = APIRouter(prefix="/api", tags=["research"])
 
 
 @router.get("/research", response_model=list[ResearchRead])
-async def list_all_research(db: AsyncSession = Depends(get_db)):
+async def list_all_research(
+    db: AsyncSession = Depends(get_db),
+    current_org: Organization = Depends(get_current_organization),
+):
     researches = list(
         (
             await db.execute(
-                select(Research).order_by(Research.created_at.desc())
+                select(Research)
+                .join(Project, Research.project_id == Project.id)
+                .where(Project.organization_id == current_org.id)
+                .order_by(Research.created_at.desc())
             )
         ).scalars()
     )
@@ -39,8 +48,12 @@ async def list_all_research(db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/projects/{project_id}/research", response_model=list[ResearchRead])
-async def list_research(project_id: int, db: AsyncSession = Depends(get_db)):
-    await get_project_or_404(db, project_id)
+async def list_research(
+    project_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_org: Organization = Depends(get_current_organization),
+):
+    await get_org_project(db, project_id, current_org.id)
     researches = list(
         (
             await db.execute(
@@ -52,7 +65,12 @@ async def list_research(project_id: int, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/research", response_model=ResearchRead, status_code=202)
-async def create_research(payload: ResearchCreate, db: AsyncSession = Depends(get_db)):
+async def create_research(
+    payload: ResearchCreate,
+    db: AsyncSession = Depends(get_db),
+    current_org: Organization = Depends(get_current_organization),
+):
+    await get_org_project(db, payload.project_id, current_org.id)
     service = ResearchService()
     try:
         research = await service.create_research(
@@ -69,29 +87,34 @@ async def create_research(payload: ResearchCreate, db: AsyncSession = Depends(ge
 
 
 @router.get("/research/{research_id}", response_model=ResearchRead)
-async def get_research(research_id: int, db: AsyncSession = Depends(get_db)):
-    research = await db.get(Research, research_id)
-    if research is None:
-        raise HTTPException(status_code=404, detail="Research not found")
-    return await research_read(db, research)
+async def get_research(
+    research_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_org: Organization = Depends(get_current_organization),
+):
+    return await get_org_research(db, research_id, current_org.id)
 
 
 @router.delete("/research/{research_id}", status_code=204)
-async def delete_research(research_id: int, db: AsyncSession = Depends(get_db)):
+async def delete_research(
+    research_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_org: Organization = Depends(get_current_organization),
+):
     """Delete a research and all its children (runs, raw responses, analyses,
     citations, competitor mentions, AI profiles) via DB-level ON DELETE CASCADE."""
-    research = await db.get(Research, research_id)
-    if research is None:
-        raise HTTPException(status_code=404, detail="Research not found")
+    research = await get_org_research(db, research_id, current_org.id)
     await db.delete(research)
     await db.commit()
 
 
 @router.get("/research/{research_id}/runs", response_model=list[ResearchRunRead])
-async def list_runs(research_id: int, db: AsyncSession = Depends(get_db)):
-    research = await db.get(Research, research_id)
-    if research is None:
-        raise HTTPException(status_code=404, detail="Research not found")
+async def list_runs(
+    research_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_org: Organization = Depends(get_current_organization),
+):
+    await get_org_research(db, research_id, current_org.id)
     runs = list(
         (
             await db.execute(
@@ -103,10 +126,12 @@ async def list_runs(research_id: int, db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/runs/{run_id}", response_model=RunDetailResponse)
-async def get_run_detail(run_id: int, db: AsyncSession = Depends(get_db)):
-    run = await db.get(ResearchRun, run_id)
-    if run is None:
-        raise HTTPException(status_code=404, detail="ResearchRun not found")
+async def get_run_detail(
+    run_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_org: Organization = Depends(get_current_organization),
+):
+    run = await get_org_run(db, run_id, current_org.id)
 
     prompt = await db.get(Prompt, run.prompt_id)
     analysis = (

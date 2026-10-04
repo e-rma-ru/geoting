@@ -1,8 +1,17 @@
+let _on401 = null
+export function onAuthFail(cb) {
+  _on401 = cb
+}
+
 async function request(path, options = {}) {
   const res = await fetch(path, {
+    credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     ...options,
   })
+  if (res.status === 401 && _on401) {
+    _on401()
+  }
   if (!res.ok) {
     let detail = res.statusText
     try {
@@ -18,6 +27,14 @@ async function request(path, options = {}) {
 }
 
 export const api = {
+  // auth
+  register: (payload) => request('/api/auth/register', { method: 'POST', body: JSON.stringify(payload) }),
+  login: (payload) => request('/api/auth/login', { method: 'POST', body: JSON.stringify(payload) }),
+  logout: () => request('/api/auth/logout', { method: 'POST' }),
+  me: () => request('/api/auth/me'),
+  updateProfile: (payload) => request('/api/auth/me', { method: 'PUT', body: JSON.stringify(payload) }),
+  changePassword: (payload) => request('/api/auth/change-password', { method: 'POST', body: JSON.stringify(payload) }),
+
   // projects
   projects: () => request('/api/projects'),
   createProject: (payload) => request('/api/projects', { method: 'POST', body: JSON.stringify(payload) }),
@@ -42,7 +59,7 @@ export const api = {
   importPromptsCsv: async (projectId, file) => {
     const form = new FormData()
     form.append('file', file)
-    const res = await fetch(`/api/projects/${projectId}/prompts/import`, { method: 'POST', body: form })
+    const res = await fetch(`/api/projects/${projectId}/prompts/import`, { method: 'POST', body: form, credentials: 'include' })
     if (!res.ok) {
       let detail = res.statusText
       try {

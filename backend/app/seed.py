@@ -6,7 +6,7 @@ import logging
 from sqlalchemy import select
 
 from app.database import Base, SessionLocal, engine
-from app.models import Project, Prompt
+from app.models import Organization, Project, Prompt
 
 logger = logging.getLogger("geoting.seed")
 
@@ -64,16 +64,29 @@ async def seed() -> None:
         await conn.run_sync(Base.metadata.create_all)
 
     async with SessionLocal() as db:
+        # Ensure Default Organization exists (idempotent).
+        org = (
+            await db.execute(select(Organization).where(Organization.slug == "default"))
+        ).scalar_one_or_none()
+        if org is None:
+            org = Organization(name="Default Organization", slug="default")
+            db.add(org)
+            await db.flush()
+            logger.info("Created Default Organization")
+
         project = (
             await db.execute(select(Project).where(Project.name == PROJECT_DATA["name"]))
         ).scalar_one_or_none()
 
         if project is None:
-            project = Project(**PROJECT_DATA)
+            project = Project(organization_id=org.id, **PROJECT_DATA)
             db.add(project)
             await db.flush()
             logger.info("Created project: %s", project.name)
         else:
+            # Ensure existing project is linked to an organization.
+            if project.organization_id is None:
+                project.organization_id = org.id
             logger.info("Project already exists: %s", project.name)
 
         existing_texts = set(

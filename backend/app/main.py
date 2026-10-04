@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select, text, update
 
+from app.api import auth as auth_api
 from app.api import dashboard, projects, prompts, research, settings
 from app.config import settings as app_settings
 from app.database import Base, SessionLocal, engine
@@ -29,6 +30,23 @@ async def run_migrations() -> None:
     fresh databases are safe too).
     """
     async with engine.begin() as conn:
+        # --- Ensure Default Organization exists (every startup, for fresh and existing DBs) ---
+        result = await conn.execute(
+            text(
+                "INSERT INTO organizations (name, slug, created_at, updated_at) "
+                "VALUES ('Default Organization', 'default', NOW(), NOW()) "
+                "ON CONFLICT (slug) DO NOTHING "
+                "RETURNING id"
+            )
+        )
+        default_org_id = result.scalar_one_or_none()
+        if default_org_id is None:
+            default_org_id = (
+                await conn.execute(
+                    text("SELECT id FROM organizations WHERE slug = 'default'")
+                )
+            ).scalar_one()
+
         has_col = (
             await conn.execute(
                 text(
@@ -48,6 +66,44 @@ async def run_migrations() -> None:
                 )
             )
             await conn.execute(text("ALTER TABLE research DROP COLUMN IF EXISTS model"))
+
+        # --- Multi-tenant foundation: organization_id on projects ---
+        has_org_col = (
+            await conn.execute(
+                text(
+                    "SELECT column_name FROM information_schema.columns "
+                    "WHERE table_name='projects' AND column_name='organization_id'"
+                )
+            )
+        ).scalar_one_or_none()
+
+        if not has_org_col:
+            logger.info("Migrating projects: adding organization_id…")
+
+            # Add column as nullable first.
+            await conn.execute(text("ALTER TABLE projects ADD COLUMN IF NOT EXISTS organization_id INTEGER"))
+
+            # Backfill existing projects with the default organization.
+            await conn.execute(
+                text("UPDATE projects SET organization_id = :org_id WHERE organization_id IS NULL"),
+                {"org_id": default_org_id},
+            )
+
+            # Make NOT NULL.
+            await conn.execute(text("ALTER TABLE projects ALTER COLUMN organization_id SET NOT NULL"))
+
+            # Add foreign key constraint.
+            await conn.execute(text(
+                "ALTER TABLE projects ADD CONSTRAINT fk_projects_organization_id "
+                "FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE"
+            ))
+
+            # Add index.
+            await conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_projects_organization_id ON projects(organization_id)"
+            ))
+
+            logger.info("Organization_id migration applied to projects")
     logger.info("Schema migrations applied")
 
 
@@ -95,6 +151,7 @@ app.include_router(prompts.router)
 app.include_router(research.router)
 app.include_router(dashboard.router)
 app.include_router(settings.router)
+app.include_router(auth_api.router)
 
 
 @app.get("/api/health")

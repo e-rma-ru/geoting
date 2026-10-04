@@ -48,6 +48,12 @@ class Settings(BaseSettings):
     profile_moderate_threshold: float = 0.2
     profile_summary_min_mentions: int = 3
 
+    # Authentication
+    # Override with a strong random value in production. The default below is
+    # only for local development — never use it in production.
+    auth_secret: str = "dev-secret-change-in-production"
+    auth_cookie_secure: bool = False
+
     @property
     def configured(self) -> bool:
         return bool(self.routerai_api_key)

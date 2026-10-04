@@ -1,3 +1,6 @@
+from app.models.user import User
+from app.models.organization import Organization
+from app.models.organization_membership import OrganizationMembership
 from app.models.project import Project
 from app.models.prompt import Prompt
 from app.models.research import Research
@@ -9,6 +12,9 @@ from app.models.competitor_mention import CompetitorMention
 from app.models.company_profile import CompanyProfile, CompanyProfileFact
 
 __all__ = [
+    "User",
+    "Organization",
+    "OrganizationMembership",
     "Project",
     "Prompt",
     "Research",

@@ -1,9 +1,13 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import get_org_project, get_org_research
+from app.auth import get_current_organization
 from app.database import get_db
+from app.models.organization import Organization
+from app.models.project import Project
 from app.models.research import Research
 from app.services.metrics import (
     compute_project_timeseries,
@@ -16,30 +20,41 @@ router = APIRouter(prefix="/api", tags=["dashboard"])
 
 
 @router.get("/research/{research_id}/dashboard")
-async def research_dashboard(research_id: int, db: AsyncSession = Depends(get_db)):
-    try:
-        return await compute_research_detail(db, research_id)
-    except ValueError:
-        raise HTTPException(status_code=404, detail="Research not found")
+async def research_dashboard(
+    research_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_org: Organization = Depends(get_current_organization),
+):
+    await get_org_research(db, research_id, current_org.id)
+    return await compute_research_detail(db, research_id)
 
 
 @router.get("/projects/{project_id}/dashboard")
-async def project_dashboard(project_id: int, db: AsyncSession = Depends(get_db)):
+async def project_dashboard(
+    project_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_org: Organization = Depends(get_current_organization),
+):
+    await get_org_project(db, project_id, current_org.id)
     timeseries = await compute_project_timeseries(db, project_id)
     return {"project_id": project_id, "timeseries": timeseries}
 
 
 @router.get("/research/{research_id}/metrics")
-async def research_metrics(research_id: int, db: AsyncSession = Depends(get_db)):
-    research = await db.get(Research, research_id)
-    if research is None:
-        raise HTTPException(status_code=404, detail="Research not found")
+async def research_metrics(
+    research_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_org: Organization = Depends(get_current_organization),
+):
+    research = await get_org_research(db, research_id, current_org.id)
     return await compute_research_metrics(db, research_id)
 
 
 @router.get("/compare")
-async def compare_research(    research_ids: str,
+async def compare_research(
+    research_ids: str,
     db: AsyncSession = Depends(get_db),
+    current_org: Organization = Depends(get_current_organization),
 ):
     """research_ids: comma-separated ids, e.g. ?research_ids=1,2"""
     try:
@@ -51,9 +66,7 @@ async def compare_research(    research_ids: str,
 
     results = []
     for rid in ids:
-        research = await db.get(Research, rid)
-        if research is None:
-            raise HTTPException(status_code=404, detail=f"Research {rid} not found")
+        research = await get_org_research(db, rid, current_org.id)
         metrics = await compute_research_metrics(db, rid)
         results.append(
             {
@@ -88,8 +101,13 @@ async def compare_research(    research_ids: str,
 
 
 @router.get("/research/{research_id}/profiles")
-async def research_profiles(research_id: int, db: AsyncSession = Depends(get_db)):
+async def research_profiles(
+    research_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_org: Organization = Depends(get_current_organization),
+):
     """Read saved AI profiles. DB read only — never triggers LLM calls."""
+    await get_org_research(db, research_id, current_org.id)
     try:
         return await get_profiles(db, research_id)
     except ResearchProfilesNotFoundError:
@@ -97,8 +115,13 @@ async def research_profiles(research_id: int, db: AsyncSession = Depends(get_db)
 
 
 @router.post("/research/{research_id}/profiles/build")
-async def research_profiles_build(research_id: int, db: AsyncSession = Depends(get_db)):
+async def research_profiles_build(
+    research_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_org: Organization = Depends(get_current_organization),
+):
     """Explicitly build AI profiles from existing runs. May use AI API credits."""
+    await get_org_research(db, research_id, current_org.id)
     try:
         return await build_profiles(db, research_id)
     except ResearchProfilesNotFoundError:
